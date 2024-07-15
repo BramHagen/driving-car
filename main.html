@@ -21,15 +21,16 @@
     </style>
   </head>
   <body>
-    <script src="./ammo.js-main/builds/ammo.js"></script>
+    <script src="./ammo.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script>
-        let scene, camera, renderer, car;
+        let scene, camera, renderer, car, objective;
         let moveForward = false;
         let moveBackward = false;
         let turnLeft = false;
         let turnRight = false;
         const groundSize = 200;
+        const spawnSize = groundSize - 20;
 
         // Physics variables
         let physicsWorld;
@@ -94,6 +95,9 @@
 
             // Add trees
             addTrees();
+
+            objective = createObjective();
+            scene.add(objective);
 
             document.addEventListener("keydown", onKeyDown);
             document.addEventListener("keyup", onKeyUp);
@@ -255,7 +259,6 @@
         }
 
         function createTree() {
-            const spawnSize = groundSize - 20;
             const treeGroup = new THREE.Group();
             const treeThickness = getRandomArbitrary(1.5, 2);
             const treeDifferenceTop = getRandomArbitrary(0.2, 0.7);
@@ -286,9 +289,9 @@
 
             // Add physics to the tree
             let pos = {
-                x: Math.random() * groundSize - groundSize / 2,
+                x: Math.random() * spawnSize - spawnSize / 2,
                 y: 0,
-                z: Math.random() * groundSize - groundSize / 2,
+                z: Math.random() * spawnSize - spawnSize / 2,
             };
             let scale = { x: treeThickness, y: treeBaseHeight, z: treeThickness };
             let quat = { x: 0, y: 0, z: 0, w: 1 };
@@ -333,6 +336,40 @@
                 const tree = createTree();
                 scene.add(tree);
             }
+        }
+
+        function createObjective() {
+            const objectiveGeometry = new THREE.SphereGeometry(1, 32, 32);
+            const objectiveMaterial = new THREE.MeshPhongMaterial({ color: 0xffff00 });
+            const objective = new THREE.Mesh(objectiveGeometry, objectiveMaterial);
+
+            // Set random position
+            objective.position.set(
+                Math.random() * spawnSize - spawnSize / 2,
+                1,
+                Math.random() * spawnSize - spawnSize / 2
+            );
+
+            return objective;
+        }
+
+        function checkObjectiveCollision() {
+            const carPosition = new THREE.Vector3();
+            car.getWorldPosition(carPosition);
+
+            const distance = carPosition.distanceTo(objective.position);
+
+            if (distance < 3) {  // Adjust this value based on your car and objective sizes
+                respawnObjective();
+            }
+        }
+
+        function respawnObjective() {
+            objective.position.set(
+                Math.random() * spawnSize - spawnSize / 2,
+                1,
+                Math.random() * spawnSize - spawnSize / 2
+            );
         }
 
         function onKeyDown(event) {
@@ -385,7 +422,7 @@
             if (physicsWorld) {
                 const vehicle = car.userData.vehicle;
 
-                const speed = 25;
+                const speed = 10;
                 const steering = 0.15;
 
                 let engineForce = 0;
@@ -409,6 +446,9 @@
                     vehicle.applyEngineForce(engineForce, i);
                     vehicle.setBrake(0, i);
                 }
+
+                updatePhysics(deltaTime);
+                checkObjectiveCollision();
 
                 vehicle.setSteeringValue(steering_value, 0);
                 vehicle.setSteeringValue(steering_value, 1);
