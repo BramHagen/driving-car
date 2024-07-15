@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>3D Car Driving</title>
+    <style>
+        html {
+            overflow: hidden;
+        }
+
+        body {
+            margin: 0;
+            height: 100%;
+            width: 100%;
+        }
+
+        canvas {
+            display: block;
+        }
+    </style>
+  </head>
+  <body>
+    <script src="./ammo.js-main/builds/ammo.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        let scene, camera, renderer, car;
+        let moveForward = false;
+        let moveBackward = false;
+        let turnLeft = false;
+        let turnRight = false;
+        const groundSize = 200;
+
+        // Physics variables
+        let physicsWorld;
+        let rigidBodies = [];
+        let tmpTrans;
+        let vehicle;
+
+        Ammo()
+            .then(start)
+            .catch((error) => console.error("Error loading Ammo.js:", error));
+
+        function start() {
+            tmpTrans = new Ammo.btTransform();
+            setupPhysicsWorld();
+            init();
+            animate();
+        }
+
+        function setupPhysicsWorld() {
+            let collisionConfiguration = new Ammo.btDefaultCollisionConfiguration();
+            let dispatcher = new Ammo.btCollisionDispatcher(collisionConfiguration);
+            let overlappingPairCache = new Ammo.btDbvtBroadphase();
+            let solver = new Ammo.btSequentialImpulseConstraintSolver();
+
+            physicsWorld = new Ammo.btDiscreteDynamicsWorld(
+                dispatcher,
+                overlappingPairCache,
+                solver,
+                collisionConfiguration
+            );
+            physicsWorld.setGravity(new Ammo.btVector3(0, -9.82, 0));
+        }
+
+        function init() {
+            scene = new THREE.Scene();
+
+            camera = new THREE.PerspectiveCamera(
+                75,
+                window.innerWidth / window.innerHeight,
+                0.1,
+                1000
+            );
+
+            renderer = new THREE.WebGLRenderer();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            // Add lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
+            directionalLight.position.set(0, 100, 0);
+            scene.add(directionalLight);
+
+            // Create car
+            car = createCar();
+            scene.add(car);
+
+            // Create ground
+            createGround();
+
+            // Add trees
+            addTrees();
+
+            document.addEventListener("keydown", onKeyDown);
+            document.addEventListener("keyup", onKeyUp);
+
+            animate();
+        }
+
+        function createGround() {
+            let pos = { x: 0, y: -0.5, z: 0 };
+            let scale = { x: groundSize, y: 1, z: groundSize };
+            let quat = { x: 0, y: 0, z: 0, w: 1 };
+            let mass = 0; // mass of 0 makes it static
+
+            // Three.js part
+            let groundGeometry = new THREE.BoxGeometry(scale.x, scale.y, scale.z);
+            let groundMaterial = new THREE.MeshPhongMaterial({ color: 0x228b22 });
+            let ground = new THREE.Mesh(groundGeometry, groundMaterial);
+            ground.position.set(pos.x, pos.y, pos.z);
+            scene.add(ground);
+
+            // Ammo.js part
+            let transform = new Ammo.btTransform();
+            transform.setIdentity();
+            transform.setOrigin(new Ammo.btVector3(pos.x, pos.y, pos.z));
+            transform.setRotation(
+                new Ammo.btQuaternion(quat.x, quat.y, quat.z, quat.w)
+            );
+            let motionState = new Ammo.btDefaultMotionState(transform);
+
+            let colShape = new Ammo.btBoxShape(
+                new Ammo.btVector3(scale.x * 0.5, scale.y * 0.5, scale.z * 0.5)
+            );
+            colShape.setMargin(0.05);
+
+            let localInertia = new Ammo.btVector3(0, 0, 0);
+            colShape.calculateLocalInertia(mass, localInertia);
+
+            let rbInfo = new Ammo.btRigidBodyConstructionInfo(
+                mass,
+                motionState,
+                colShape,
+                localInertia
+            );
+            let body = new Ammo.btRigidBody(rbInfo);
+
+            physicsWorld.addRigidBody(body);
+        }
+
+        function createCar() {
+            const carGroup = new THREE.Group();
+
+            // Car body
+            const bodyGeometry = new THREE.BoxGeometry(4, 1.5, 6);
+            const bodyMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+            const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+            body.position.y = 1.5;
+            carGroup.add(body);
+
+            // Car roof
+            const roofGeometry = new THREE.BoxGeometry(3, 1, 4);
+            const roofMaterial = new THREE.MeshBasicMaterial({ color: 0xcc0000 });
+            const roof = new THREE.Mesh(roofGeometry, roofMaterial);
+            roof.position.y = 2.75;
+            carGroup.add(roof);
+
+            // Ammo.js vehicle
+            const mass = 800;
+            const chassisShape = new Ammo.btBoxShape(
+                new Ammo.btVector3(2, 0.75, 3)
+            );
+            const localInertia = new Ammo.btVector3(0, 0, 0);
+            chassisShape.calculateLocalInertia(mass, localInertia);
+
+            const transform = new Ammo.btTransform();
+            transform.setIdentity();
+            transform.setOrigin(new Ammo.btVector3(0, 4, 0));
+            const motionState = new Ammo.btDefaultMotionState(transform);
+            const chassisBody = new Ammo.btRigidBody(
+                new Ammo.btRigidBodyConstructionInfo(
+                    mass,
+                    motionState,
+                    chassisShape,
+                    localInertia
+                )
+            );
+            chassisBody.setActivationState(4);
+
+            physicsWorld.addRigidBody(chassisBody);
+
+            // Create vehicle
+            const tuning = new Ammo.btVehicleTuning();
+            const rayCaster = new Ammo.btDefaultVehicleRaycaster(physicsWorld);
+            vehicle = new Ammo.btRaycastVehicle(tuning, chassisBody, rayCaster);
+            vehicle.setCoordinateSystem(0, 1, 2);
+            physicsWorld.addAction(vehicle);
+
+            // Wheels
+            const wheelGeometry = new THREE.CylinderGeometry(0.5, 0.5, 0.5, 32);
+            wheelGeometry.rotateZ(Math.PI / 2);
+            const wheelMaterial = new THREE.MeshBasicMaterial({ color: 0x333333 });
+            const wheelPositions = [
+                [-1.5, 0.5, -2],
+                [1.5, 0.5, -2],
+                [-1.5, 0.5, 2],
+                [1.5, 0.5, 2],
+            ];
+
+            carGroup.wheels = []; // Store wheel meshes in this array
+
+            wheelPositions.forEach((position) => {
+                const wheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
+                wheel.position.set(...position);
+                carGroup.add(wheel);
+                carGroup.wheels.push(wheel); // Add the wheel mesh to the wheels array
+            });
+            const wheelRadius = 0.5;
+            const wheelHalfTrack = 1.75;
+            const wheelAxisHeight = 0.3;
+            const wheelDirectionCS0 = new Ammo.btVector3(0, -1, 0);
+            const wheelAxleCS = new Ammo.btVector3(-1, 0, 0);
+
+            const addWheel = (isFront, pos) => {
+                const wheelInfo = vehicle.addWheel(
+                    pos,
+                    wheelDirectionCS0,
+                    wheelAxleCS,
+                    0.6,
+                    wheelRadius,
+                    tuning,
+                    isFront
+                );
+
+                wheelInfo.set_m_suspensionStiffness(50);
+                wheelInfo.set_m_wheelsDampingRelaxation(2.3);
+                wheelInfo.set_m_wheelsDampingCompression(4.4);
+                wheelInfo.set_m_frictionSlip(100);
+                wheelInfo.set_m_rollInfluence(0.1);
+            };
+
+            addWheel(true, new Ammo.btVector3(-wheelHalfTrack, wheelAxisHeight, 2));
+            addWheel(true, new Ammo.btVector3(wheelHalfTrack, wheelAxisHeight, 2));
+            addWheel(
+                false,
+                new Ammo.btVector3(-wheelHalfTrack, wheelAxisHeight, -2)
+            );
+            addWheel(
+                false,
+                new Ammo.btVector3(wheelHalfTrack, wheelAxisHeight, -2)
+            );
+            carGroup.userData.physicsBody = chassisBody;
+            carGroup.userData.vehicle = vehicle;
+            rigidBodies.push(carGroup);
+
+            return carGroup;
+        }
+
+        function getRandomArbitrary(min, max) {
+            return Math.random() * (max - min) + min;
+        }
+
+        function createTree() {
+            const spawnSize = groundSize - 20;
+            const treeGroup = new THREE.Group();
+            const treeThickness = getRandomArbitrary(1.5, 2);
+            const treeDifferenceTop = getRandomArbitrary(0.2, 0.7);
+            const treeBaseHeight = getRandomArbitrary(5, 15);
+
+            // Tree trunk
+            const trunkGeometry = new THREE.CylinderGeometry(
+                treeThickness - treeDifferenceTop,
+                treeThickness,
+                treeBaseHeight,
+                12
+            );
+            const trunkMaterial = new THREE.MeshPhongMaterial({ color: 0x8b4513 });
+            const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+            trunk.position.y = treeBaseHeight / 2;
+            treeGroup.add(trunk);
+
+            // Tree leaves
+            const leavesGeometry = new THREE.ConeGeometry(
+                treeThickness + 4,
+                treeBaseHeight * 1.5,
+                8
+            );
+            const leavesMaterial = new THREE.MeshPhongMaterial({ color: 0x228b22 });
+            const leaves = new THREE.Mesh(leavesGeometry, leavesMaterial);
+            leaves.position.y = treeBaseHeight + (treeBaseHeight * 1.5) / 2;
+            treeGroup.add(leaves);
+
+            // Add physics to the tree
+            let pos = {
+                x: Math.random() * groundSize - groundSize / 2,
+                y: 0,
+                z: Math.random() * groundSize - groundSize / 2,
+            };
+            let scale = { x: treeThickness, y: treeBaseHeight, z: treeThickness };
+            let quat = { x: 0, y: 0, z: 0, w: 1 };
+            let mass = 0; // static object
+
+            let transform = new Ammo.btTransform();
+            transform.setIdentity();
+            transform.setOrigin(new Ammo.btVector3(pos.x, pos.y, pos.z));
+            transform.setRotation(
+                new Ammo.btQuaternion(quat.x, quat.y, quat.z, quat.w)
+            );
+            let motionState = new Ammo.btDefaultMotionState(transform);
+
+            let colShape = new Ammo.btCylinderShape(
+                new Ammo.btVector3(scale.x * 0.5, scale.y * 0.5, scale.z * 0.5)
+            );
+            colShape.setMargin(0.05);
+
+            let localInertia = new Ammo.btVector3(0, 0, 0);
+            colShape.calculateLocalInertia(mass, localInertia);
+
+            let rbInfo = new Ammo.btRigidBodyConstructionInfo(
+                mass,
+                motionState,
+                colShape,
+                localInertia
+            );
+            let body = new Ammo.btRigidBody(rbInfo);
+
+            physicsWorld.addRigidBody(body);
+
+            treeGroup.userData.physicsBody = body;
+            rigidBodies.push(treeGroup);
+
+            return treeGroup;
+        }
+
+        function addTrees() {
+            const numTrees = 50;
+
+            for (let i = 0; i < numTrees; i++) {
+                const tree = createTree();
+                scene.add(tree);
+            }
+        }
+
+        function onKeyDown(event) {
+            switch (event.keyCode) {
+                case 38:
+                case 87:
+                    moveForward = true;
+                    break;
+                case 40:
+                case 83:
+                    moveBackward = true;
+                    break;
+                case 37:
+                case 65:
+                    turnLeft = true;
+                    break;
+                case 39:
+                case 68:
+                    turnRight = true;
+                    break;
+            }
+        }
+
+        function onKeyUp(event) {
+            switch (event.keyCode) {
+                case 38:
+                case 87:
+                    moveForward = false;
+                    break;
+                case 40:
+                case 83:
+                    moveBackward = false;
+                    break;
+                case 37:
+                case 65:
+                    turnLeft = false;
+                    break;
+                case 39:
+                case 68:
+                    turnRight = false;
+                    break;
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const deltaTime = 1;
+
+            if (physicsWorld) {
+                const vehicle = car.userData.vehicle;
+
+                const speed = 25;
+                const steering = 0.15;
+
+                let engineForce = 0;
+                let steering_value = 0;
+
+                if (moveForward) {
+                    engineForce = speed;
+                } else if (moveBackward) {
+                    engineForce = -speed / 2;
+                }
+
+                if (turnLeft) {
+                    steering_value = steering;
+                } else if (turnRight) {
+                    steering_value = -steering;
+                }
+
+                const numWheels = vehicle.getNumWheels();
+
+                for (let i = 0; i < numWheels; i++) {
+                    vehicle.applyEngineForce(engineForce, i);
+                    vehicle.setBrake(0, i);
+                }
+
+                vehicle.setSteeringValue(steering_value, 0);
+                vehicle.setSteeringValue(steering_value, 1);
+
+                updatePhysics(deltaTime);
+
+                // Update camera position
+                const carPos = car.position;
+                const cameraOffset = new THREE.Vector3(0, 5, -15);
+                cameraOffset.applyQuaternion(car.quaternion);
+                camera.position.copy(carPos).add(cameraOffset);
+                camera.lookAt(carPos);
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        function updatePhysics(deltaTime) {
+            physicsWorld.stepSimulation(deltaTime, 10);
+
+            for (let i = 0; i < rigidBodies.length; i++) {
+                const objThree = rigidBodies[i];
+                const objAmmo = objThree.userData.physicsBody;
+                const ms = objAmmo.getMotionState();
+                if (ms) {
+                    ms.getWorldTransform(tmpTrans);
+                    const p = tmpTrans.getOrigin();
+                    const q = tmpTrans.getRotation();
+                    objThree.position.set(p.x(), p.y(), p.z());
+                    objThree.quaternion.set(q.x(), q.y(), q.z(), q.w());
+                }
+            }
+
+            // Update wheel visuals
+            const vehicle = car.userData.vehicle;
+            for (let i = 0; i < vehicle.getNumWheels(); i++) {
+                vehicle.updateWheelTransform(i, true);
+                // const tm = vehicle.getWheelTransformWS(i);
+                // const p = tm.getOrigin();
+                // const q = tm.getRotation();
+                // car.wheels[i].position.set(p.x(), p.y(), p.z());
+                // car.wheels[i].quaternion.set(q.x(), q.y(), q.z(), q.w());
+            }
+        }
+    </script>
+  </body>
+</html>
