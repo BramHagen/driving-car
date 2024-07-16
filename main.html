@@ -103,14 +103,11 @@
                 collectionSound.setVolume(0.5);
             });
 
-            // Create car
             car = createCar();
             scene.add(car);
 
-            // Create ground
             createGround();
-
-            // Add trees
+            addFences();
             addTrees();
 
             objective = createObjective();
@@ -353,6 +350,70 @@
                 const tree = createTree();
                 scene.add(tree);
             }
+        }
+
+        function createFence(pos, scale, quat) {
+            // Three.js part
+            let fenceGeometry = new THREE.BoxGeometry(scale.x, scale.y, scale.z);
+            let fenceMaterial = new THREE.MeshPhongMaterial({color: 0x8b4513});
+            let fence = new THREE.Mesh(fenceGeometry, fenceMaterial);
+            fence.position.set(pos.x, pos.y, pos.z);
+            fence.setRotationFromQuaternion(new THREE.Quaternion(quat.x, quat.y, quat.z, quat.w));
+            scene.add(fence);
+
+            // Ammo.js part
+            let transform = new Ammo.btTransform();
+            transform.setIdentity();
+            transform.setOrigin(new Ammo.btVector3(pos.x, pos.y, pos.z));
+            transform.setRotation(new Ammo.btQuaternion(quat.x, quat.y, quat.z, quat.w));
+            let motionState = new Ammo.btDefaultMotionState(transform);
+
+            let colShape = new Ammo.btBoxShape(new Ammo.btVector3(scale.x * 0.5, scale.y * 0.5, scale.z * 0.5));
+            colShape.setMargin(0.05);
+
+            let localInertia = new Ammo.btVector3(0, 0, 0);
+            colShape.calculateLocalInertia(0, localInertia);
+
+            let rbInfo = new Ammo.btRigidBodyConstructionInfo(0, motionState, colShape, localInertia);
+            let body = new Ammo.btRigidBody(rbInfo);
+
+            physicsWorld.addRigidBody(body);
+
+            fence.userData.physicsBody = body;
+            rigidBodies.push(fence);
+        }
+
+        function addFences() {
+            const fenceHeight = 3;
+            const fenceThickness = 1;
+
+            // North fence
+            createFence(
+                {x: 0, y: fenceHeight / 2, z: groundSize / 2},
+                {x: groundSize, y: fenceHeight, z: fenceThickness},
+                {x: 0, y: 0, z: 0, w: 1}
+            );
+
+            // South fence
+            createFence(
+                {x: 0, y: fenceHeight / 2, z: -groundSize / 2},
+                {x: groundSize, y: fenceHeight, z: fenceThickness},
+                {x: 0, y: 0, z: 0, w: 1}
+            );
+
+            // East fence
+            createFence(
+                {x: groundSize / 2, y: fenceHeight / 2, z: 0},
+                {x: fenceThickness, y: fenceHeight, z: groundSize},
+                {x: 0, y: 0, z: 0, w: 1}
+            );
+
+            // West fence
+            createFence(
+                {x: -groundSize / 2, y: fenceHeight / 2, z: 0},
+                {x: fenceThickness, y: fenceHeight, z: groundSize},
+                {x: 0, y: 0, z: 0, w: 1}
+            );
         }
 
         function createObjective() {
