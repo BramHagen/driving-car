@@ -344,31 +344,31 @@
         }
 
         function addTrees() {
-            const numTrees = 50;
+            const numTrees = 20;
 
             for (let i = 0; i < numTrees; i++) {
                 const tree = createTree();
                 scene.add(tree);
             }
         }
+        function createFencePost(pos) {
+            const postHeight = 2.5;
+            const postWidth = 0.7;
 
-        function createFence(pos, scale, quat) {
             // Three.js part
-            let fenceGeometry = new THREE.BoxGeometry(scale.x, scale.y, scale.z);
-            let fenceMaterial = new THREE.MeshPhongMaterial({color: 0x8b4513});
-            let fence = new THREE.Mesh(fenceGeometry, fenceMaterial);
-            fence.position.set(pos.x, pos.y, pos.z);
-            fence.setRotationFromQuaternion(new THREE.Quaternion(quat.x, quat.y, quat.z, quat.w));
-            scene.add(fence);
+            let postGeometry = new THREE.BoxGeometry(postWidth, postHeight, postWidth);
+            let postMaterial = new THREE.MeshPhongMaterial({color: 0x8b4513});
+            let post = new THREE.Mesh(postGeometry, postMaterial);
+            post.position.set(pos.x, pos.y + postHeight / 2, pos.z);
+            scene.add(post);
 
             // Ammo.js part
             let transform = new Ammo.btTransform();
             transform.setIdentity();
-            transform.setOrigin(new Ammo.btVector3(pos.x, pos.y, pos.z));
-            transform.setRotation(new Ammo.btQuaternion(quat.x, quat.y, quat.z, quat.w));
+            transform.setOrigin(new Ammo.btVector3(pos.x, pos.y + postHeight / 2, pos.z));
             let motionState = new Ammo.btDefaultMotionState(transform);
 
-            let colShape = new Ammo.btBoxShape(new Ammo.btVector3(scale.x * 0.5, scale.y * 0.5, scale.z * 0.5));
+            let colShape = new Ammo.btBoxShape(new Ammo.btVector3(postWidth / 2, postHeight / 2, postWidth / 2));
             colShape.setMargin(0.05);
 
             let localInertia = new Ammo.btVector3(0, 0, 0);
@@ -379,45 +379,87 @@
 
             physicsWorld.addRigidBody(body);
 
-            fence.userData.physicsBody = body;
-            rigidBodies.push(fence);
+            post.userData.physicsBody = body;
+            rigidBodies.push(post);
+        }
+
+        function createFenceRail(start, end, height) {
+            const railHeight = 0.5;
+            const railDepth = 0.5;
+
+            const railLength = new THREE.Vector3().subVectors(end, start).length();
+            let railGeometry = new THREE.BoxGeometry(railLength, railHeight, railDepth);
+            let railMaterial = new THREE.MeshPhongMaterial({color: 0xa0522d});
+            let rail = new THREE.Mesh(railGeometry, railMaterial);
+
+            const midpoint = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5);
+            rail.position.set(midpoint.x, height, midpoint.z);
+
+            const direction = new THREE.Vector3().subVectors(end, start).normalize();
+            const quaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(1, 0, 0), direction);
+            rail.setRotationFromQuaternion(quaternion);
+
+            scene.add(rail);
+
+            // Ammo.js part
+            let transform = new Ammo.btTransform();
+            transform.setIdentity();
+            transform.setOrigin(new Ammo.btVector3(midpoint.x, height, midpoint.z));
+            transform.setRotation(new Ammo.btQuaternion(quaternion.x, quaternion.y, quaternion.z, quaternion.w));
+            let motionState = new Ammo.btDefaultMotionState(transform);
+
+            let colShape = new Ammo.btBoxShape(new Ammo.btVector3(railLength / 2, railHeight / 2, railDepth / 2));
+            colShape.setMargin(0.05);
+
+            let localInertia = new Ammo.btVector3(0, 0, 0);
+            colShape.calculateLocalInertia(0, localInertia);
+
+            let rbInfo = new Ammo.btRigidBodyConstructionInfo(0, motionState, colShape, localInertia);
+            let body = new Ammo.btRigidBody(rbInfo);
+
+            physicsWorld.addRigidBody(body);
+
+            rail.userData.physicsBody = body;
+            rigidBodies.push(rail);
         }
 
         function addFences() {
             const fenceHeight = 3;
-            const fenceThickness = 1;
+            const postSpacing = 10;
+            const numRails = 2;
 
-            // North fence
-            createFence(
-                {x: 0, y: fenceHeight / 2, z: groundSize / 2},
-                {x: groundSize, y: fenceHeight, z: fenceThickness},
-                {x: 0, y: 0, z: 0, w: 1}
-            );
+            // Create posts and rails for each side of the ground
+            for (let i = 0; i < 4; i++) {
+                const isVertical = i % 2 === 0;
+                const sign = i < 2 ? 1 : -1;
+                const length = groundSize;
+                const numPosts = Math.floor(length / postSpacing) + 1;
 
-            // South fence
-            createFence(
-                {x: 0, y: fenceHeight / 2, z: -groundSize / 2},
-                {x: groundSize, y: fenceHeight, z: fenceThickness},
-                {x: 0, y: 0, z: 0, w: 1}
-            );
+                let prevPost = null;
+                for (let j = 0; j < numPosts; j++) {
+                    const progress = j / (numPosts - 1);
+                    const pos = {
+                        x: isVertical ? sign * groundSize / 2 : (progress * length - length / 2),
+                        y: 0,
+                        z: isVertical ? (progress * length - length / 2) : sign * groundSize / 2
+                    };
 
-            // East fence
-            createFence(
-                {x: groundSize / 2, y: fenceHeight / 2, z: 0},
-                {x: fenceThickness, y: fenceHeight, z: groundSize},
-                {x: 0, y: 0, z: 0, w: 1}
-            );
+                    createFencePost(pos);
 
-            // West fence
-            createFence(
-                {x: -groundSize / 2, y: fenceHeight / 2, z: 0},
-                {x: fenceThickness, y: fenceHeight, z: groundSize},
-                {x: 0, y: 0, z: 0, w: 1}
-            );
+                    if (prevPost) {
+                        for (let k = 0; k < numRails; k++) {
+                            const railHeight = fenceHeight * (k + 1) / (numRails + 1);
+                            createFenceRail(prevPost, pos, railHeight);
+                        }
+                    }
+
+                    prevPost = pos;
+                }
+            }
         }
 
         function createObjective() {
-            const objectiveGeometry = new THREE.SphereGeometry(1, 32, 32);
+            const objectiveGeometry = new THREE.SphereGeometry(5, 32, 32);
             const objectiveMaterial = new THREE.MeshPhongMaterial({color: 0xffff00});
             const objective = new THREE.Mesh(objectiveGeometry, objectiveMaterial);
 
@@ -437,7 +479,7 @@
 
             const distance = carPosition.distanceTo(objective.position);
 
-            if (distance < 3) {  // Adjust this value based on your car and objective sizes
+            if (distance < 8) {  // Adjust this value based on your car and objective sizes
                 objectivesCollected++;
                 updateCounterDisplay();
                 if (collectionSound && collectionSound.isPlayed) {
