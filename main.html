@@ -23,14 +23,21 @@
   <body>
     <script src="./ammo.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <div
+      id="counter"
+      style="position: absolute; top: 10px; left: 10px; color: white; font-size: 24px; font-family: Arial;"
+    >
+      Objectives: 0
+    </div>
     <script>
-        let scene, camera, renderer, car, objective;
+        let scene, camera, renderer, car, objective, collectionSound;
         let moveForward = false;
         let moveBackward = false;
         let turnLeft = false;
         let turnRight = false;
         const groundSize = 200;
         const spawnSize = groundSize - 20;
+        let objectivesCollected = 0;
 
         // Physics variables
         let physicsWorld;
@@ -86,6 +93,16 @@
             directionalLight.position.set(0, 100, 0);
             scene.add(directionalLight);
 
+            // Load collection sound
+            const audioLoader = new THREE.AudioLoader();
+            const listener = new THREE.AudioListener();
+            camera.add(listener);
+            collectionSound = new THREE.Audio(listener);
+            audioLoader.load('sound/collection.mp3', function (buffer) {
+                collectionSound.setBuffer(buffer);
+                collectionSound.setVolume(0.5);
+            });
+
             // Create car
             car = createCar();
             scene.add(car);
@@ -106,14 +123,14 @@
         }
 
         function createGround() {
-            let pos = { x: 0, y: -0.5, z: 0 };
-            let scale = { x: groundSize, y: 1, z: groundSize };
-            let quat = { x: 0, y: 0, z: 0, w: 1 };
+            let pos = {x: 0, y: -0.5, z: 0};
+            let scale = {x: groundSize, y: 1, z: groundSize};
+            let quat = {x: 0, y: 0, z: 0, w: 1};
             let mass = 0; // mass of 0 makes it static
 
             // Three.js part
             let groundGeometry = new THREE.BoxGeometry(scale.x, scale.y, scale.z);
-            let groundMaterial = new THREE.MeshPhongMaterial({ color: 0x228b22 });
+            let groundMaterial = new THREE.MeshPhongMaterial({color: 0x228b22});
             let ground = new THREE.Mesh(groundGeometry, groundMaterial);
             ground.position.set(pos.x, pos.y, pos.z);
             scene.add(ground);
@@ -151,14 +168,14 @@
 
             // Car body
             const bodyGeometry = new THREE.BoxGeometry(4, 1.5, 6);
-            const bodyMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+            const bodyMaterial = new THREE.MeshBasicMaterial({color: 0xff0000});
             const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
             body.position.y = 1.5;
             carGroup.add(body);
 
             // Car roof
             const roofGeometry = new THREE.BoxGeometry(3, 1, 4);
-            const roofMaterial = new THREE.MeshBasicMaterial({ color: 0xcc0000 });
+            const roofMaterial = new THREE.MeshBasicMaterial({color: 0xcc0000});
             const roof = new THREE.Mesh(roofGeometry, roofMaterial);
             roof.position.y = 2.75;
             carGroup.add(roof);
@@ -197,7 +214,7 @@
             // Wheels
             const wheelGeometry = new THREE.CylinderGeometry(0.5, 0.5, 0.5, 32);
             wheelGeometry.rotateZ(Math.PI / 2);
-            const wheelMaterial = new THREE.MeshBasicMaterial({ color: 0x333333 });
+            const wheelMaterial = new THREE.MeshBasicMaterial({color: 0x333333});
             const wheelPositions = [
                 [-1.5, 0.5, -2],
                 [1.5, 0.5, -2],
@@ -271,7 +288,7 @@
                 treeBaseHeight,
                 12
             );
-            const trunkMaterial = new THREE.MeshPhongMaterial({ color: 0x8b4513 });
+            const trunkMaterial = new THREE.MeshPhongMaterial({color: 0x8b4513});
             const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
             trunk.position.y = treeBaseHeight / 2;
             treeGroup.add(trunk);
@@ -282,7 +299,7 @@
                 treeBaseHeight * 1.5,
                 8
             );
-            const leavesMaterial = new THREE.MeshPhongMaterial({ color: 0x228b22 });
+            const leavesMaterial = new THREE.MeshPhongMaterial({color: 0x228b22});
             const leaves = new THREE.Mesh(leavesGeometry, leavesMaterial);
             leaves.position.y = treeBaseHeight + (treeBaseHeight * 1.5) / 2;
             treeGroup.add(leaves);
@@ -293,8 +310,8 @@
                 y: 0,
                 z: Math.random() * spawnSize - spawnSize / 2,
             };
-            let scale = { x: treeThickness, y: treeBaseHeight, z: treeThickness };
-            let quat = { x: 0, y: 0, z: 0, w: 1 };
+            let scale = {x: treeThickness, y: treeBaseHeight, z: treeThickness};
+            let quat = {x: 0, y: 0, z: 0, w: 1};
             let mass = 0; // static object
 
             let transform = new Ammo.btTransform();
@@ -340,7 +357,7 @@
 
         function createObjective() {
             const objectiveGeometry = new THREE.SphereGeometry(1, 32, 32);
-            const objectiveMaterial = new THREE.MeshPhongMaterial({ color: 0xffff00 });
+            const objectiveMaterial = new THREE.MeshPhongMaterial({color: 0xffff00});
             const objective = new THREE.Mesh(objectiveGeometry, objectiveMaterial);
 
             // Set random position
@@ -360,16 +377,26 @@
             const distance = carPosition.distanceTo(objective.position);
 
             if (distance < 3) {  // Adjust this value based on your car and objective sizes
+                objectivesCollected++;
+                updateCounterDisplay();
+                if (collectionSound && collectionSound.isPlayed) {
+                    collectionSound.play();
+                }
                 respawnObjective();
             }
         }
 
+        function updateCounterDisplay() {
+            document.getElementById('counter').innerText = `Objectives: ${objectivesCollected}`;
+        }
+
         function respawnObjective() {
-            objective.position.set(
-                Math.random() * spawnSize - spawnSize / 2,
-                1,
-                Math.random() * spawnSize - spawnSize / 2
-            );
+            +
+                objective.position.set(
+                    Math.random() * spawnSize - spawnSize / 2,
+                    1,
+                    Math.random() * spawnSize - spawnSize / 2
+                );
         }
 
         function onKeyDown(event) {
