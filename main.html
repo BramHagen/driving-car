@@ -261,6 +261,9 @@
                 false,
                 new Ammo.btVector3(wheelHalfTrack, wheelAxisHeight, -2)
             );
+
+            carGroup.frontWheels = [carGroup.wheels[2], carGroup.wheels[3]];
+
             carGroup.userData.physicsBody = chassisBody;
             carGroup.userData.vehicle = vehicle;
             rigidBodies.push(carGroup);
@@ -583,6 +586,9 @@
                 vehicle.setSteeringValue(steering_value, 0);
                 vehicle.setSteeringValue(steering_value, 1);
 
+                // Update wheel rotations
+                updateWheelRotations(vehicle, steering_value);
+
                 updatePhysics(deltaTime);
 
                 // Update camera position
@@ -594,6 +600,15 @@
             }
 
             renderer.render(scene, camera);
+        }
+
+        function updateWheelRotations(vehicle, steering_value) {
+            const wheelRotation = new THREE.Quaternion();
+            wheelRotation.setFromAxisAngle(new THREE.Vector3(0, 1, 0), steering_value);
+
+            for (let i = 0; i < 2; i++) { // Only update front wheels
+                car.frontWheels[i].quaternion.copy(wheelRotation);
+            }
         }
 
         function updatePhysics(deltaTime) {
