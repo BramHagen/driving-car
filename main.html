@@ -29,12 +29,16 @@
     >
       Objectives: 0
     </div>
+    <div id="speedometer" style="position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); color: white; font-size: 24px; font-family: Arial;">
+      Speed: 0 km/h
+    </div>
     <script>
         let scene, camera, renderer, car, objective, collectionSound, arrow;
         let moveForward = false;
         let moveBackward = false;
         let turnLeft = false;
         let turnRight = false;
+        let brake = false;
         const groundSize = 200;
         const spawnSize = groundSize - 20;
         let objectivesCollected = 0;
@@ -499,6 +503,16 @@
             document.getElementById('counter').innerText = `Objectives: ${objectivesCollected}`;
         }
 
+        function updateSpeedometer() {
+            if (!car || !car.userData.vehicle) return;
+
+            const vehicle = car.userData.vehicle;
+            const speed = vehicle.getCurrentSpeedKmHour();
+            const speedRounded = Math.round(speed);
+
+            document.getElementById('speedometer').innerText = `Speed: ${speedRounded} km/h`;
+        }
+
         function createArrow() {
             const arrowGroup = new THREE.Group();
 
@@ -568,6 +582,9 @@
                 case 68:
                     turnRight = true;
                     break;
+                case 32:
+                    brake = true;
+                    break;
             }
         }
 
@@ -589,6 +606,9 @@
                 case 68:
                     turnRight = false;
                     break;
+                case 32:
+                    brake = false;
+                    break;
             }
         }
 
@@ -602,6 +622,7 @@
 
                 const speed = 10;
                 const steering = 0.15;
+                const brakeForce = 0.5;
 
                 let engineForce = 0;
                 let steering_value = 0;
@@ -621,13 +642,18 @@
                 const numWheels = vehicle.getNumWheels();
 
                 for (let i = 0; i < numWheels; i++) {
+                    if (brake) {
+                        vehicle.setBrake(brakeForce, i);
+                    } else {
+                        vehicle.setBrake(0, i);
+                    }
                     vehicle.applyEngineForce(engineForce, i);
-                    vehicle.setBrake(0, i);
                 }
 
                 updatePhysics(deltaTime);
                 checkObjectiveCollision();
                 updateArrowDirection();
+                updateSpeedometer();
 
                 vehicle.setSteeringValue(steering_value, 0);
                 vehicle.setSteeringValue(steering_value, 1);
