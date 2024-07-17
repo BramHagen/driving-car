@@ -30,7 +30,7 @@
       Objectives: 0
     </div>
     <script>
-        let scene, camera, renderer, car, objective, collectionSound;
+        let scene, camera, renderer, car, objective, collectionSound, arrow;
         let moveForward = false;
         let moveBackward = false;
         let turnLeft = false;
@@ -112,6 +112,8 @@
 
             objective = createObjective();
             scene.add(objective);
+
+            arrow = createArrow();
 
             document.addEventListener("keydown", onKeyDown);
             document.addEventListener("keyup", onKeyUp);
@@ -266,7 +268,7 @@
 
             carGroup.userData.physicsBody = chassisBody;
             carGroup.userData.vehicle = vehicle;
-            rigidBodies.push(carGroup);
+            rigidBodies.push(carGroup)
 
             return carGroup;
         }
@@ -354,6 +356,7 @@
                 scene.add(tree);
             }
         }
+
         function createFencePost(pos) {
             const postHeight = 2.5;
             const postWidth = 0.7;
@@ -496,13 +499,21 @@
             document.getElementById('counter').innerText = `Objectives: ${objectivesCollected}`;
         }
 
+        function createArrow() {
+            const arrowGeometry = new THREE.ConeGeometry(0.5, 2, 64);
+            const arrowMaterial = new THREE.MeshBasicMaterial({color: 0xff0000});
+            const arrow = new THREE.Mesh(arrowGeometry, arrowMaterial);
+            arrow.rotation.x = Math.PI / 2;
+            scene.add(arrow); // Add the arrow directly to the scene
+            return arrow;
+        }
+
         function respawnObjective() {
-            +
-                objective.position.set(
-                    Math.random() * spawnSize - spawnSize / 2,
-                    1,
-                    Math.random() * spawnSize - spawnSize / 2
-                );
+            objective.position.set(
+                Math.random() * spawnSize - spawnSize / 2,
+                1,
+                Math.random() * spawnSize - spawnSize / 2
+            );
         }
 
         function onKeyDown(event) {
@@ -582,13 +593,12 @@
 
                 updatePhysics(deltaTime);
                 checkObjectiveCollision();
+                updateArrowDirection();
 
                 vehicle.setSteeringValue(steering_value, 0);
                 vehicle.setSteeringValue(steering_value, 1);
 
-                // Update wheel rotations
                 updateWheelRotations(vehicle, steering_value);
-
                 updatePhysics(deltaTime);
 
                 // Update camera position
@@ -611,6 +621,22 @@
             }
         }
 
+        function updateArrowDirection() {
+            if (!car || !arrow || !objective) return;
+
+            const carPosition = new THREE.Vector3();
+            car.getWorldPosition(carPosition);
+
+            // Position the arrow above the car
+            arrow.position.set(carPosition.x, carPosition.y + 3, carPosition.z);
+
+            // Make the arrow look at the objective
+            arrow.lookAt(objective.position);
+
+            // Adjust the arrow's rotation to point forward
+            arrow.rotateX(Math.PI / 2);
+        }
+
         function updatePhysics(deltaTime) {
             physicsWorld.stepSimulation(deltaTime, 10);
 
@@ -626,17 +652,6 @@
                     objThree.quaternion.set(q.x(), q.y(), q.z(), q.w());
                 }
             }
-
-            // Update wheel visuals
-            // const vehicle = car.userData.vehicle;
-            // for (let i = 0; i < vehicle.getNumWheels(); i++) {
-            //     vehicle.updateWheelTransform(i, true);
-            //     const tm = vehicle.getWheelTransformWS(i);
-            //     const p = tm.getOrigin();
-            //     const q = tm.getRotation();
-            //     car.wheels[i].position.set(p.x(), p.y(), p.z());
-            //     car.wheels[i].quaternion.set(q.x(), q.y(), q.z(), q.w());
-            // }
         }
     </script>
   </body>
