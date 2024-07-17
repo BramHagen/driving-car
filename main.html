@@ -500,12 +500,46 @@
         }
 
         function createArrow() {
-            const arrowGeometry = new THREE.ConeGeometry(0.5, 2, 64);
-            const arrowMaterial = new THREE.MeshBasicMaterial({color: 0xff0000});
-            const arrow = new THREE.Mesh(arrowGeometry, arrowMaterial);
-            arrow.rotation.x = Math.PI / 2;
-            scene.add(arrow); // Add the arrow directly to the scene
-            return arrow;
+            const arrowGroup = new THREE.Group();
+
+            const lightGray = 0xaaaaaa;  // Light gray color
+            const darkGray = 0x9e9e9e;   // Dark gray color for back faces
+
+            // Create the line part
+            const lineGeometry = new THREE.CylinderGeometry(0.1, 0.1, 0.6, 32);
+            const lineMaterial = new THREE.MeshBasicMaterial({color: lightGray});
+            const line = new THREE.Mesh(lineGeometry, lineMaterial);
+            line.rotation.z = Math.PI / 2;
+            line.position.x = -0.3; // Move the line back
+
+            // Create the point part
+            const pointGeometry = new THREE.ConeGeometry(0.2, 0.6, 32,5);
+            const pointMaterial = new THREE.MeshBasicMaterial({color: lightGray});
+            const point = new THREE.Mesh(pointGeometry, pointMaterial);
+            point.rotation.z = -Math.PI / 2;
+            point.position.x = 0.3; // Move the point forward
+
+            // Create dark back face
+            const backPlateGeometryPoint = new THREE.CircleGeometry(0.2, 32);
+            const backPlateMaterialPoint = new THREE.MeshBasicMaterial({color: darkGray, side: THREE.DoubleSide});
+            const backPlatePoint = new THREE.Mesh(backPlateGeometryPoint, backPlateMaterialPoint);
+            backPlatePoint.position.set(-0.01, 0, 0);
+            backPlatePoint.rotation.y = Math.PI / 2;
+
+            const backPlateGeometry = new THREE.CircleGeometry(0.1, 32);
+            const backPlateMaterial = new THREE.MeshBasicMaterial({color: darkGray, side: THREE.DoubleSide});
+            const backPlate = new THREE.Mesh(backPlateGeometry, backPlateMaterial);
+            backPlate.position.set(-0.61, 0, 0);
+            backPlate.rotation.y = Math.PI / 2;
+
+            // Add all parts to the group
+            arrowGroup.add(line);
+            arrowGroup.add(point);
+            arrowGroup.add(backPlatePoint);
+            arrowGroup.add(backPlate);
+
+            scene.add(arrowGroup);
+            return arrowGroup;
         }
 
         function respawnObjective() {
@@ -628,13 +662,13 @@
             car.getWorldPosition(carPosition);
 
             // Position the arrow above the car
-            arrow.position.set(carPosition.x, carPosition.y + 3, carPosition.z);
+            arrow.position.set(carPosition.x, carPosition.y + 2, carPosition.z);
 
             // Make the arrow look at the objective
             arrow.lookAt(objective.position);
 
             // Adjust the arrow's rotation to point forward
-            arrow.rotateX(Math.PI / 2);
+            arrow.rotateY(-Math.PI / 2);
         }
 
         function updatePhysics(deltaTime) {
